@@ -277,7 +277,7 @@ func CopiarParaSistemaReal(meuFS *os.File, cabecalho Cabecalho) error {
 	if erro != nil {
 		return erro
 	}
-	// Ver se arquivo existe no root
+	// Vendo se arquivo existe no root
 	var indiceDoArquivoNoRoot int = -1
 	for indice, entrada := range root {
 		if strings.TrimRight(string(entrada.NomeArquivo[:]), "\x00") == nomeArquivo {
@@ -341,5 +341,58 @@ func CopiarParaSistemaReal(meuFS *os.File, cabecalho Cabecalho) error {
 		}
 	}
 	fmt.Println("arquivo baixado com sucesso!")
+	return nil
+}
+
+// RenomearArquivo renomeia um arquivo armazenado dentro do meufs
+func RenomearArquivo(meuFS *os.File, cabecalho Cabecalho) error {
+	// Solicitando nome do arquivo a ser renomeado
+	var nomeAntigo string
+	fmt.Println("Digite o nome do arquivo que deseja renomear: ")
+	fmt.Scanln(&nomeAntigo)
+	// Solicitando novo nome do arquivo a ser renomeado
+	var nomeNovo string
+	fmt.Println("Digite o novo nome do arquivo que deseja renomear: ")
+	fmt.Scanln(&nomeNovo)
+	if len(nomeNovo) > 19 {
+		return errors.New("nome do arquivo nao pode ter mais de 19 caracteres")
+	}
+	// Lendo root
+	root, erro := LerRoot(cabecalho, meuFS)
+	if erro != nil {
+		return erro
+	}
+	// Vendo se arquivo existe no root
+	var indiceDoArquivoNoRoot int = -1
+	for indice, entrada := range root {
+		if strings.TrimRight(string(entrada.NomeArquivo[:]), "\x00") == nomeAntigo {
+			indiceDoArquivoNoRoot = indice
+			break
+		}
+	}
+	if indiceDoArquivoNoRoot == -1 {
+		return errors.New("arquivo com esse nome não existe no sistema de arquivos meufs")
+	}
+	// Renomeando arquivo
+	var nomeNovoArray [20]byte
+	copy(nomeNovoArray[:], nomeNovo)
+	root[indiceDoArquivoNoRoot].NomeArquivo = nomeNovoArray
+	// Salvando root atualizado
+	// movendo ponteiro
+	_, erro = meuFS.Seek(int64(cabecalho.InicioRoot), 0)
+	if erro != nil {
+		return fmt.Errorf("erro ao posicionar o ponteiro no início do diretorio raiz: %w", erro)
+	}
+	// escrevendo root atualizado
+	erro = binary.Write(meuFS, binary.LittleEndian, root)
+	if erro != nil {
+		return fmt.Errorf("erro ao escrever root atualizado: %w", erro)
+	}
+	// Garante que os dados estejam no disco
+	erro = meuFS.Sync()
+	if erro != nil {
+		return fmt.Errorf("erro ao sincronizar o arquivo: %w", erro)
+	}
+	fmt.Println("arquivo renomeado com sucesso!")
 	return nil
 }
