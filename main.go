@@ -32,7 +32,6 @@ func main() {
 	if erro != nil {
 		log.Fatal(erro)
 	}
-	fmt.Println(cabecalho)
 	// Esperando ação do usuário
 	var escolha int
 	fmt.Println("O que deseja fazer?\n1. Uploadear arquivo\n2. Baixar arquivo\n3. Renomear arquivo\n4. Remover arquivo\n5. Listar arquivos\n6. Mostrar espaço livre:  ")
@@ -47,6 +46,11 @@ func main() {
 	if escolha == 1 {
 		// Solicitando arquivo e o copiando para meufs
 		if erro = CopiarParaMeuFS(meuFS, cabecalho); erro != nil {
+			log.Fatal(erro)
+		}
+	} else if escolha == 2 {
+		// Solicitando nome do arquivo e o copiando para sistema de arquivos real
+		if erro = CopiarParaSistemaReal(meuFS, cabecalho); erro != nil {
 			log.Fatal(erro)
 		}
 	}

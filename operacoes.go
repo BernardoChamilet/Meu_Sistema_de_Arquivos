@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 )
 
 type Cabecalho struct {
@@ -262,5 +263,83 @@ func CopiarParaMeuFS(meuFS *os.File, cabecalho Cabecalho) error {
 		return fmt.Errorf("erro ao sincronizar o arquivo: %w", erro)
 	}
 	fmt.Println("arquivo copiado com sucesso!")
+	return nil
+}
+
+// CopiarParaSistemaReal copia um arquivo de dentro do meuFS para um sistema de arquivos real (disco, pendrive, etc)
+func CopiarParaSistemaReal(meuFS *os.File, cabecalho Cabecalho) error {
+	// Solicitando nome do arquivo a ser copiado para o sistema real
+	var nomeArquivo string
+	fmt.Println("Digite o nome do arquivo que deseja baixar: ")
+	fmt.Scanln(&nomeArquivo)
+	// Lendo root
+	root, erro := LerRoot(cabecalho, meuFS)
+	if erro != nil {
+		return erro
+	}
+	// Ver se arquivo existe no root
+	var indiceDoArquivoNoRoot int = -1
+	for indice, entrada := range root {
+		if strings.TrimRight(string(entrada.NomeArquivo[:]), "\x00") == nomeArquivo {
+			indiceDoArquivoNoRoot = indice
+			break
+		}
+	}
+	if indiceDoArquivoNoRoot == -1 {
+		return errors.New("arquivo com esse nome não existe no sistema de arquivos meufs")
+	}
+	// Lendo FAT
+	fat, erro := LerFAT(cabecalho, meuFS)
+	if erro != nil {
+		return erro
+	}
+	// Obtendo endereço dos blocos do arquivo com a fat
+	posicaoNaFAT := root[indiceDoArquivoNoRoot].EnderecoFAT
+	var blocosDoArquivo []uint32
+	blocosDoArquivo = append(blocosDoArquivo, posicaoNaFAT)
+	for {
+		if fat[posicaoNaFAT] == 0xFFFFFFFF {
+			break
+		}
+		posicaoNaFAT = fat[posicaoNaFAT]
+		blocosDoArquivo = append(blocosDoArquivo, posicaoNaFAT)
+	}
+	// Solicitando onde no sistema real o arquivo vai ser copiado para
+	var caminho string
+	fmt.Println("Digite onde você deseja que o arquivo seja baixado: ")
+	fmt.Scanln(&caminho)
+	var nomeReal string
+	fmt.Println("Digite que nome deseja dar ao arquivo baixado: ")
+	fmt.Scanln(&nomeReal)
+	// Criar o arquivo no sistema real
+	caminhoComleto := fmt.Sprintf("%s/%s", caminho, nomeReal)
+	arquivoReal, erro := os.Create(caminhoComleto)
+	if erro != nil {
+		return fmt.Errorf("erro ao criar o arquivo no sistema real: %w", erro)
+	}
+	defer arquivoReal.Close()
+	// Passando para o sistema real os blocos 1 por 1 da área de dados do meufs
+	blocoDoArquivo := make([]byte, cabecalho.TamanhoBloco)
+	for _, entrada := range blocosDoArquivo {
+		// Obtendo posicao do bloco
+		posicaoBloco := int64(cabecalho.InicioDados + (cabecalho.TamanhoBloco * entrada))
+		// Movendo ponteiro para a posicao do bloco do arquivo
+		_, erro = meuFS.Seek(posicaoBloco, 0)
+		if erro != nil {
+			return fmt.Errorf("erro ao posicionar ponteiro no bloco do arquivo: %w", erro)
+		}
+		// Lendo bloco
+		numBytes, erro := meuFS.Read(blocoDoArquivo)
+		if erro != nil {
+			return fmt.Errorf("erro ao ler bloco do arquivo a ser baixado: %w", erro)
+		}
+		// Escrevendo no sistemas de arquivo real
+		// Necessita de :numBytes para escrever apenas os bytes usados pelo arquivo no último bloco
+		_, erro = arquivoReal.Write(blocoDoArquivo[:numBytes])
+		if erro != nil {
+			return fmt.Errorf("erro ao escrever bloco no arquivo no sistema real: %w", erro)
+		}
+	}
+	fmt.Println("arquivo baixado com sucesso!")
 	return nil
 }
