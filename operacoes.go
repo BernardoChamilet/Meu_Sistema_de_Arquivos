@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ type Cabecalho struct {
 type DiretorioRoot struct {
 	NomeArquivo [20]byte // Máximo 19 caracteres
 	EnderecoFAT uint32
+	Protegido   uint8
 }
 
 // CriarFS cria um arquivo meufs.fs com tamanho especificado pelo usuário e escreve o cabeçalho do sistema de arquivos nele
@@ -31,6 +33,9 @@ func CriarFS() error {
 	if erro != nil {
 		return fmt.Errorf("erro ao ler a entrada: %w", erro)
 	}
+	// Limpando o buffer de entrada
+	reader := bufio.NewReader(os.Stdin)
+	reader.ReadString('\n') // Consome o '\n'
 	// Validando o tamanho fornecido pelo usuário
 	if tamanhoArquivoMB < 100 || tamanhoArquivoMB > 800 {
 		return errors.New("o tamanho deve estar entre 100MB e 800MB")
@@ -231,6 +236,7 @@ func CopiarParaMeuFS(meuFS *os.File, cabecalho Cabecalho) error {
 	var novaEntradaRoot DiretorioRoot
 	copy(novaEntradaRoot.NomeArquivo[:], nomeArquivo)
 	novaEntradaRoot.EnderecoFAT = indicesLivresFAT[0]
+	novaEntradaRoot.Protegido = 0
 	root[indiceLivreRoot] = novaEntradaRoot
 	// movendo ponteiro
 	_, erro = meuFS.Seek(int64(cabecalho.InicioRoot), 0)
@@ -394,5 +400,97 @@ func RenomearArquivo(meuFS *os.File, cabecalho Cabecalho) error {
 		return fmt.Errorf("erro ao sincronizar o arquivo: %w", erro)
 	}
 	fmt.Println("arquivo renomeado com sucesso!")
+	return nil
+}
+
+// RemoverArquivo remove um arquivo de dentro do meufs
+func RemoverArquivo(meuFS *os.File, cabecalho Cabecalho) error {
+	// Solicitando nome do arquivo a ser renomeado
+	var nomeArquivo string
+	fmt.Println("Digite o nome do arquivo que deseja remover: ")
+	fmt.Scanln(&nomeArquivo)
+	// Lendo root
+	root, erro := LerRoot(cabecalho, meuFS)
+	if erro != nil {
+		return erro
+	}
+	// Vendo se arquivo existe no root
+	var indiceDoArquivoNoRoot int = -1
+	for indice, entrada := range root {
+		if strings.TrimRight(string(entrada.NomeArquivo[:]), "\x00") == nomeArquivo {
+			indiceDoArquivoNoRoot = indice
+			break
+		}
+	}
+	if indiceDoArquivoNoRoot == -1 {
+		return errors.New("arquivo com esse nome não existe no sistema de arquivos meufs")
+	}
+	// Vendo se arquivo é protegido
+	if root[indiceDoArquivoNoRoot].Protegido == 1 {
+		return errors.New("esse arquivo está protegido de ser excluido")
+	}
+	// Lendo FAT
+	fat, erro := LerFAT(cabecalho, meuFS)
+	if erro != nil {
+		return erro
+	}
+	// Obtendo endereço dos blocos do arquivo com a fat
+	posicaoNaFAT := root[indiceDoArquivoNoRoot].EnderecoFAT
+	var blocosDoArquivo []uint32
+	blocosDoArquivo = append(blocosDoArquivo, posicaoNaFAT)
+	for {
+		if fat[posicaoNaFAT] == 0xFFFFFFFF {
+			break
+		}
+		posicaoNaFAT = fat[posicaoNaFAT]
+		blocosDoArquivo = append(blocosDoArquivo, posicaoNaFAT)
+	}
+	// Colocando zeros no lugar dos blocos do arquivo e atualizando fat
+	blocoDeZeros := make([]byte, cabecalho.TamanhoBloco)
+	for _, entrada := range blocosDoArquivo {
+		// Obtendo posicao do bloco
+		posicaoBloco := int64(cabecalho.InicioDados + (cabecalho.TamanhoBloco * entrada))
+		// Movendo ponteiro para a posicao do bloco do arquivo
+		_, erro = meuFS.Seek(posicaoBloco, 0)
+		if erro != nil {
+			return fmt.Errorf("erro ao posicionar ponteiro no bloco do arquivo: %w", erro)
+		}
+		// Escrevendo zeros no bloco
+		_, erro = meuFS.Write(blocoDeZeros)
+		if erro != nil {
+			return fmt.Errorf("erro ao sobrescrever bloco do arquivo com zeros: %w", erro)
+		}
+		// Atualizando FAT
+		fat[entrada] = 0
+	}
+	// Atualizando root e o salvando no arquivo
+	root[indiceDoArquivoNoRoot] = DiretorioRoot{}
+	// movendo ponteiro
+	_, erro = meuFS.Seek(int64(cabecalho.InicioRoot), 0)
+	if erro != nil {
+		return fmt.Errorf("erro ao posicionar o ponteiro no início do diretorio raiz: %w", erro)
+	}
+	// escrevendo root atualizado
+	erro = binary.Write(meuFS, binary.LittleEndian, root)
+	if erro != nil {
+		return fmt.Errorf("erro ao escrever root atualizado: %w", erro)
+	}
+	// Salvando FAT atualizada
+	// movendo ponteiro
+	_, erro = meuFS.Seek(int64(cabecalho.InicioFAT), 0)
+	if erro != nil {
+		return fmt.Errorf("erro ao posicionar ponteiro no inicio da FAT: %w", erro)
+	}
+	// escrevendo fat atualizada
+	erro = binary.Write(meuFS, binary.LittleEndian, fat)
+	if erro != nil {
+		return fmt.Errorf("erro ao escrever FAT atualizada: %w", erro)
+	}
+	// Garante que os dados estejam no disco
+	erro = meuFS.Sync()
+	if erro != nil {
+		return fmt.Errorf("erro ao sincronizar o arquivo: %w", erro)
+	}
+	fmt.Println("arquivo removido com sucesso!")
 	return nil
 }

@@ -59,6 +59,7 @@ func main() {
 			if erro = RenomearArquivo(meuFS, cabecalho); erro != nil {
 				fmt.Printf("%v\n", erro)
 			}
+		// Opção 4: Remover arquivo armazenado no meufs
 		case escolha == 4:
 			if erro = RemoverArquivo(meuFS, cabecalho); erro != nil {
 				fmt.Printf("%v\n", erro)
