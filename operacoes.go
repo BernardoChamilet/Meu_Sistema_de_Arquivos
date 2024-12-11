@@ -513,3 +513,24 @@ func ListarArquivos(meuFS *os.File, cabecalho Cabecalho) error {
 	}
 	return nil
 }
+
+// MostrarEspacoLivre mostra quantos MB livres tem em relação ao total
+func MostrarEspacoLivre(meuFS *os.File, cabecalho Cabecalho) error {
+	// Calculando espaço de dados
+	espacoDados := cabecalho.TamanhoMeuFS - cabecalho.InicioDados
+	// Lendo fat para ver espaços livres
+	fat, erro := LerFAT(cabecalho, meuFS)
+	if erro != nil {
+		return erro
+	}
+	var espacoLivre uint32 = 0
+	for _, entrada := range fat {
+		if entrada == 0 {
+			espacoLivre += cabecalho.TamanhoBloco
+		}
+	}
+	espacoDados = espacoDados / (1024 * 1024)
+	espacoLivre = espacoLivre / (1024 * 1024)
+	fmt.Printf("%dMB livres de %dMB\n", espacoLivre, espacoDados)
+	return nil
+}

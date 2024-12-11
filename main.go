@@ -69,6 +69,11 @@ func main() {
 			if erro = ListarArquivos(meuFS, cabecalho); erro != nil {
 				fmt.Printf("%v\n", erro)
 			}
+		// Opção 6: Mostrar espaço livre do meufs
+		case escolha == 6:
+			if erro = MostrarEspacoLivre(meuFS, cabecalho); erro != nil {
+				fmt.Printf("%v\n", erro)
+			}
 		// Opção 7: Encerrar programa
 		case escolha == 7:
 			fmt.Println("Programa encerrado")
