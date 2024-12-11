@@ -494,3 +494,22 @@ func RemoverArquivo(meuFS *os.File, cabecalho Cabecalho) error {
 	fmt.Println("arquivo removido com sucesso!")
 	return nil
 }
+
+// ListarArquivos imprime todos os arquivos armazenados no meufs
+func ListarArquivos(meuFS *os.File, cabecalho Cabecalho) error {
+	root, erro := LerRoot(cabecalho, meuFS)
+	if erro != nil {
+		return erro
+	}
+	nenhumArquivo := true
+	for _, entrada := range root {
+		if entrada.NomeArquivo[0] != 0 {
+			nenhumArquivo = false
+			fmt.Printf("%s\n", strings.TrimRight(string(entrada.NomeArquivo[:]), "\x00"))
+		}
+	}
+	if nenhumArquivo {
+		return errors.New("nenhum arquivo armazenado no sistema de arquivos meufs")
+	}
+	return nil
+}

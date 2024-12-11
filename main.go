@@ -64,9 +64,16 @@ func main() {
 			if erro = RemoverArquivo(meuFS, cabecalho); erro != nil {
 				fmt.Printf("%v\n", erro)
 			}
+		// Opção 5: Listar todos arquivos armazenados no meufs
+		case escolha == 5:
+			if erro = ListarArquivos(meuFS, cabecalho); erro != nil {
+				fmt.Printf("%v\n", erro)
+			}
+		// Opção 7: Encerrar programa
 		case escolha == 7:
 			fmt.Println("Programa encerrado")
 			return
+		// Default: Opção inválida
 		default:
 			fmt.Println("Opção inválida")
 		}
