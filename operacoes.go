@@ -534,3 +534,67 @@ func MostrarEspacoLivre(meuFS *os.File, cabecalho Cabecalho) error {
 	fmt.Printf("%dMB livres de %dMB\n", espacoLivre, espacoDados)
 	return nil
 }
+
+// ProtegerDesproteger arquivo protege ou desprotege um arquivo a depender se ele está protegido ou não
+func ProtegerDesprotegerArquivo(meuFS *os.File, cabecalho Cabecalho) error {
+	// Solicitando nome do arquivo a ser renomeado
+	var nomeArquivo string
+	fmt.Println("Digite o nome do arquivo que deseja proteger/desproteger: ")
+	fmt.Scanln(&nomeArquivo)
+	// Lendo root
+	root, erro := LerRoot(cabecalho, meuFS)
+	if erro != nil {
+		return erro
+	}
+	// Vendo se arquivo existe no root
+	var indiceDoArquivoNoRoot int = -1
+	for indice, entrada := range root {
+		if strings.TrimRight(string(entrada.NomeArquivo[:]), "\x00") == nomeArquivo {
+			indiceDoArquivoNoRoot = indice
+			break
+		}
+	}
+	if indiceDoArquivoNoRoot == -1 {
+		return errors.New("arquivo com esse nome não existe no sistema de arquivos meufs")
+	}
+	var confirmacao string
+	var mensagem string
+	// Vendo se arquivo é protegido
+	if root[indiceDoArquivoNoRoot].Protegido == 1 {
+		// Arquivo protegido = desproteger
+		fmt.Println("Esse arquivo está protegido. Deseja desprotege-lo? S/N")
+		fmt.Scanln(&confirmacao)
+		if confirmacao != "S" {
+			return errors.New("operação encerrada")
+		}
+		root[indiceDoArquivoNoRoot].Protegido = 0
+		mensagem = "Arquivo desprotegido com sucesso"
+	} else {
+		// Arquivo não protegido = proteger
+		fmt.Println("Esse arquivo está desprotegido. Deseja protege-lo? S/N")
+		fmt.Scanln(&confirmacao)
+		if confirmacao != "S" {
+			return errors.New("operação encerrada")
+		}
+		root[indiceDoArquivoNoRoot].Protegido = 1
+		mensagem = "Arquivo protegido com sucesso"
+	}
+	// Salvando root atualizado
+	// movendo ponteiro
+	_, erro = meuFS.Seek(int64(cabecalho.InicioRoot), 0)
+	if erro != nil {
+		return fmt.Errorf("erro ao posicionar o ponteiro no início do diretorio raiz: %w", erro)
+	}
+	// escrevendo root atualizado
+	erro = binary.Write(meuFS, binary.LittleEndian, root)
+	if erro != nil {
+		return fmt.Errorf("erro ao escrever root atualizado: %w", erro)
+	}
+	// Garante que os dados estejam no disco
+	erro = meuFS.Sync()
+	if erro != nil {
+		return fmt.Errorf("erro ao sincronizar o arquivo: %w", erro)
+	}
+	fmt.Println(mensagem)
+	return nil
+}
