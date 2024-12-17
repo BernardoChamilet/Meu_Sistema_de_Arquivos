@@ -35,7 +35,7 @@ func main() {
 	for {
 		// Esperando ação do usuário
 		var escolha int
-		fmt.Println("O que deseja fazer?\n1. Uploadear arquivo\n2. Baixar arquivo\n3. Renomear arquivo\n4. Remover arquivo\n5. Listar arquivos\n6. Mostrar espaço livre\n7. Proteger/Desproteger arquivo (se o arquivo estiver protegido ele será desprotegido e vice-versa)\n8. Encerrar programa:  ")
+		fmt.Println("O que deseja fazer?\n1. Uploadear arquivo\n2. Baixar arquivo\n3. Renomear arquivo\n4. Remover arquivo\n5. Listar arquivos\n6. Mostrar espaço livre\n7. Proteger/Desproteger arquivo (se o arquivo estiver protegido ele será desprotegido e vice-versa)\n8. Criar diretório\n9. Encerrar programa")
 		_, erro = fmt.Scanf("%d", &escolha)
 		if erro != nil {
 			log.Fatal(erro)
@@ -79,8 +79,13 @@ func main() {
 			if erro = ProtegerDesprotegerArquivo(meuFS, cabecalho); erro != nil {
 				fmt.Printf("%v\n", erro)
 			}
-		// Opção 8: Encerrar programa
+		// Opção 8: Criar diretório
 		case escolha == 8:
+			if erro = CriarDiretorio(meuFS, cabecalho); erro != nil {
+				fmt.Printf("%v\n", erro)
+			}
+		// Opção 9: Encerrar programa
+		case escolha == 9:
 			fmt.Println("Programa encerrado")
 			return
 		// Default: Opção inválida

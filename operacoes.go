@@ -22,6 +22,7 @@ type DiretorioRoot struct {
 	NomeArquivo [20]byte // Máximo 19 caracteres
 	EnderecoFAT uint32
 	Protegido   uint8
+	EhDir       uint8
 }
 
 // CriarFS cria um arquivo meufs.fs com tamanho especificado pelo usuário e escreve o cabeçalho do sistema de arquivos nele
@@ -237,6 +238,7 @@ func CopiarParaMeuFS(meuFS *os.File, cabecalho Cabecalho) error {
 	copy(novaEntradaRoot.NomeArquivo[:], nomeArquivo)
 	novaEntradaRoot.EnderecoFAT = indicesLivresFAT[0]
 	novaEntradaRoot.Protegido = 0
+	novaEntradaRoot.EhDir = 0
 	root[indiceLivreRoot] = novaEntradaRoot
 	// movendo ponteiro
 	_, erro = meuFS.Seek(int64(cabecalho.InicioRoot), 0)
@@ -505,7 +507,11 @@ func ListarArquivos(meuFS *os.File, cabecalho Cabecalho) error {
 	for _, entrada := range root {
 		if entrada.NomeArquivo[0] != 0 {
 			nenhumArquivo = false
-			fmt.Printf("%s\n", strings.TrimRight(string(entrada.NomeArquivo[:]), "\x00"))
+			if entrada.EhDir == 1 {
+				fmt.Printf("dir %s\n", strings.TrimRight(string(entrada.NomeArquivo[:]), "\x00"))
+			} else {
+				fmt.Printf("%s\n", strings.TrimRight(string(entrada.NomeArquivo[:]), "\x00"))
+			}
 		}
 	}
 	if nenhumArquivo {
@@ -596,5 +602,87 @@ func ProtegerDesprotegerArquivo(meuFS *os.File, cabecalho Cabecalho) error {
 		return fmt.Errorf("erro ao sincronizar o arquivo: %w", erro)
 	}
 	fmt.Println(mensagem)
+	return nil
+}
+
+// Criar diretório cria um diretório dentro do diretório atual
+func CriarDiretorio(meuFS *os.File, cabecalho Cabecalho) error {
+	// Solicitando nome do diretório
+	var nomeDiretorio string
+	fmt.Println("Digite o nome que quer dar ao diretório: ")
+	fmt.Scanln(&nomeDiretorio)
+	if len(nomeDiretorio) > 19 {
+		return errors.New("nome do diretorio nao pode ter mais de 19 caracteres")
+	}
+	// OBS: com um limite de 157 entradas o diretório ocupará 1 bloco
+	// Lendo FAT
+	fat, erro := LerFAT(cabecalho, meuFS)
+	if erro != nil {
+		return erro
+	}
+	// Vendo se tem espaço livre para guardar o diretorio
+	indiceLivreFAT := -1
+	for indice, entrada := range fat {
+		if entrada == 0 {
+			indiceLivreFAT = indice
+			break
+		}
+	}
+	if indiceLivreFAT == -1 {
+		return errors.New("sistema de arquivos está cheio")
+	}
+	// Lendo root
+	root, erro := LerRoot(cabecalho, meuFS)
+	if erro != nil {
+		return erro
+	}
+	// Vendo se tem espaço livre em root
+	var indiceLivreRoot int = -1
+	for indice, entrada := range root {
+		if string(entrada.NomeArquivo[:]) == nomeDiretorio && entrada.EhDir == 1 {
+			return fmt.Errorf("um diretorio com o nome '%s' já existe no sistema", nomeDiretorio)
+		}
+		if entrada.NomeArquivo[0] == 0 && indiceLivreRoot == -1 {
+			indiceLivreRoot = indice
+		}
+	}
+	if indiceLivreRoot == -1 {
+		return errors.New("diretorio raiz cheio, maximo de 200 arquivos atingido")
+	}
+	// Atualizando root
+	var novaEntradaRoot DiretorioRoot
+	copy(novaEntradaRoot.NomeArquivo[:], nomeDiretorio)
+	novaEntradaRoot.EnderecoFAT = uint32(indiceLivreFAT)
+	novaEntradaRoot.Protegido = 0
+	novaEntradaRoot.EhDir = 1
+	root[indiceLivreRoot] = novaEntradaRoot
+	// movendo ponteiro
+	_, erro = meuFS.Seek(int64(cabecalho.InicioRoot), 0)
+	if erro != nil {
+		return fmt.Errorf("erro ao posicionar o ponteiro no início do diretorio raiz: %w", erro)
+	}
+	// escrevendo root atualizado
+	erro = binary.Write(meuFS, binary.LittleEndian, root)
+	if erro != nil {
+		return fmt.Errorf("erro ao escrever root atualizado: %w", erro)
+	}
+	// Atualizando fat
+	fat[indiceLivreFAT] = 0xFFFFFFFF //numero hexadecimal uint32 muito maior que len da fat
+	// movendo ponteiro
+	_, erro = meuFS.Seek(int64(cabecalho.InicioFAT), 0)
+	if erro != nil {
+		return fmt.Errorf("erro ao posicionar ponteiro no inicio da FAT: %w", erro)
+	}
+	// escrevendo fat atualizada
+	erro = binary.Write(meuFS, binary.LittleEndian, fat)
+	if erro != nil {
+		return fmt.Errorf("erro ao escrever FAT atualizada: %w", erro)
+	}
+	// Garante que os dados estejam no disco
+	erro = meuFS.Sync()
+	if erro != nil {
+		return fmt.Errorf("erro ao sincronizar o arquivo: %w", erro)
+	}
+	fmt.Println("diretório criado com sucesso!")
 	return nil
 }

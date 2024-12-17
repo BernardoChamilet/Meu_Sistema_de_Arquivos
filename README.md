@@ -1,2 +1,2 @@
-# Meu_FIle_System
-Pequeno e simples sistema de arquivos implementado em golang
+# Meu_Sistema_de_Arquivos
+Sistema de arquivos implementado em Golang
